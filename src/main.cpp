@@ -29,7 +29,7 @@ volatile unsigned long impulseCount[2] = {0, 0};
 unsigned long previousImpulseCount[2] = {0, 0};
 float flowRate[2] = {0, 0};
 volatile double waterFlow[2] = {0.0, 0.0};
-const double litersPerPulse[2] = {1.0 / 5880.0, 1.0 / 5880.0};
+double litersPerPulse[2] = {1.0 / 5880.0, 1.0 / 5880.0};
 
 WebServer server(80);
 Adafruit_ADS1115 ads;
@@ -42,6 +42,7 @@ void leseDruckSensoren();
 String generateCSVLine();
 String getTimeString(time_t t);
 
+// Interrupt Service Routines für Durchflusssensoren
 void IRAM_ATTR onPulse0() {
   impulseCount[0]++;
   waterFlow[0] += litersPerPulse[0];
@@ -75,27 +76,28 @@ void leseDruckSensoren() {
 }
 
 void handleApiSensorwerte() {
-  DynamicJsonDocument doc(1024);
-  
-  if (ads1115_available) {
-    leseDruckSensoren();
-    for (uint8_t i = 0; i < 4; ++i) {
-      JsonObject sensor = doc.createNestedObject("sensor" + String(i+1));
-      sensor["druck_MPa"] = druckSensor[i].druck;
-      sensor["druck_bar"] = druckSensor[i].druck * 10;
-      sensor["angeschlossen"] = druckSensor[i].angeschlossen;
-    }
+  DynamicJsonDocument doc(2048); // Größeres Dokument für 4 Sensoren und 2 Flows
+
+  // Druckdaten für alle 4 Sensoren
+  leseDruckSensoren();
+  for (uint8_t i = 0; i < 4; ++i) {
+    JsonObject sensor = doc.createNestedObject("sensor" + String(i + 1));
+    sensor["druck_MPa"] = druckSensor[i].druck;
+    sensor["druck_bar"] = druckSensor[i].druck * 10;
+    sensor["angeschlossen"] = druckSensor[i].angeschlossen;
   }
 
-  noInterrupts();
-  doc["flow1"]["rate"] = flowRate[0];
-  doc["flow1"]["total"] = waterFlow[0];
-  doc["flow2"]["rate"] = flowRate[1];
-  doc["flow2"]["total"] = waterFlow[1];
-  interrupts();
+  // Durchflussdaten
+  JsonObject flow1 = doc.createNestedObject("flow1");
+  flow1["rate"] = flowRate[0];
+  flow1["total"] = waterFlow[0];
+
+  JsonObject flow2 = doc.createNestedObject("flow2");
+  flow2["rate"] = flowRate[1];
+  flow2["total"] = waterFlow[1];
 
   doc["recording"] = recording;
-  
+
   String response;
   serializeJson(doc, response);
   server.send(200, "application/json", response);
@@ -160,21 +162,27 @@ void logData() {
 }
 
 String generateCSVLine() {
-  String line = String(millis()/1000) + ",";
-  
-  if (ads1115_available) {
-    for (uint8_t i = 0; i < 4; ++i) {
-      line += String(druckSensor[i].druck, 3) + ",";
-      line += String(druckSensor[i].druck * 10, 3) + ",";
+    time_t utc = now();
+    time_t local = berlinTZ.toLocal(utc);
+    
+    // Schritt 1: Zeitstring
+    String line = getTimeString(local);
+    // Schritt 2: Komma anhängen
+    line += ",";
+    
+    if (ads1115_available) {
+        for (uint8_t i = 0; i < 4; ++i) {
+            line += String(druckSensor[i].druck, 3) + ",";
+            line += String(druckSensor[i].druck * 10, 3) + ",";
+        }
     }
-  }
-  
-  line += String(flowRate[0], 3) + ",";
-  line += String(flowRate[1], 3) + ",";
-  line += String(waterFlow[0], 3) + ",";
-  line += String(waterFlow[1], 3);
-  
-  return line;
+    
+    line += String(flowRate[0], 3) + ",";
+    line += String(flowRate[1], 3) + ",";
+    line += String(waterFlow[0], 3) + ",";
+    line += String(waterFlow[1], 3);
+    
+    return line;
 }
 
 void setup() {
@@ -194,6 +202,7 @@ void setup() {
 
   WiFi.softAP(ssid, password);
   
+  // API-Endpunkte
   server.on("/", []() {
     File file = LittleFS.open("/index.html");
     server.streamFile(file, "text/html");
@@ -208,20 +217,23 @@ void setup() {
   server.on("/deleteLog", handleDeleteLog);
   server.on("/clearCumulativeFlow", handleClearCumulativeFlow);
 
+  // Styles.css
   server.on("/styles.css", []() {
     File file = LittleFS.open("/styles.css");
     server.streamFile(file, "text/css");
     file.close();
   });
 
+  // Script.js
   server.on("/script.js", []() {
     File file = LittleFS.open("/script.js");
     server.streamFile(file, "application/javascript");
     file.close();
   });
 
+  // Starte Server
   server.begin();
-  setTime(0);
+  setTime(0); // Zeit initialisieren
 }
 
 void loop() {

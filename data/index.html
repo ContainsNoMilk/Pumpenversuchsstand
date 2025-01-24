@@ -15,30 +15,43 @@
     <!-- Zeit-Anzeige oben rechts -->
     <div id="timeDisplay" class="time-display"></div>
 
-    <!-- Zeit-Einstellungsmodal -->
-    <div id="timeModal" class="modal">
-        <div class="modal-content">
-            <h3>Zeiteinstellung (Berlin)</h3>
-            <div class="modal-input-group">
-                <input type="datetime-local" id="datetimeInput" 
-                       pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}">
-            </div>
-            <div class="modal-button-group">
-                <button onclick="setCustomTime()" class="primary">
-                    <span class="icon">✓</span> Übernehmen
-                </button>
-                <button onclick="syncDeviceTime()" class="secondary">
-                    <span class="icon">🔄</span> Gerätezeit
-                </button>
-                <button onclick="hideModal()" class="cancel">
-                    <span class="icon">✕</span> Abbrechen
-                </button>
-            </div>
-            <div class="timezone-info">
-                Automatische Umstellung zwischen CET (Winter) und CEST (Sommer)
-            </div>
-        </div>
-    </div>
+        <!-- Zeit-Einstellungsmodal -->
+        <div id="timeModal" 
+        class="modal" 
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="timeModalTitle">
+       <div class="modal-content" role="document">
+           <h3 id="timeModalTitle">Zeiteinstellung (Berlin)</h3>
+           <div class="modal-input-group">
+               <label for="datetimeInput" class="visually-hidden">Datum und Uhrzeit</label>
+               <input type="datetime-local" 
+                      id="datetimeInput"
+                      aria-describedby="timezoneHelp"
+                      pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}">
+           </div>
+           <div class="modal-button-group">
+               <button onclick="setCustomTime()" 
+                       class="primary"
+                       aria-label="Ausgewählte Zeit übernehmen">
+                   <span class="icon" aria-hidden="true">✓</span> Übernehmen
+               </button>
+               <button onclick="syncDeviceTime()" 
+                       class="secondary"
+                       aria-label="Zeit mit Gerätezeit synchronisieren">
+                   <span class="icon" aria-hidden="true">🔄</span> Gerätezeit
+               </button>
+               <button onclick="hideModal()" 
+                       class="cancel"
+                       aria-label="Dialog schließen">
+                   <span class="icon" aria-hidden="true">✕</span> Abbrechen
+               </button>
+           </div>
+           <div id="timezoneHelp" class="timezone-info">
+               Automatische Umstellung zwischen CET (Winter) und CEST (Sommer)
+           </div>
+       </div>
+   </div>
 
     <!-- Hauptcontainer -->
     <div class="container">
@@ -51,14 +64,15 @@
                 <canvas id="flowChart"></canvas>
                 <div class="chart-legend">
                     <span class="legend-item">
-                        <div class="color-box flow1"></div> Sensor 1 (L/min)
+                        <div class="color-box flow1"></div> Flow Meter 1 (L/min)
                     </span>
                     <span class="legend-item">
-                        <div class="color-box flow2"></div> Sensor 2 (L/min)
+                        <div class="color-box flow2"></div> Flow Meter 2 (L/min)
                     </span>
                 </div>
             </div>
         </div>
+        
 
         <!-- Echtzeit-Druckdiagramm -->
         <div class="sensor-section">
@@ -72,11 +86,17 @@
                     <span class="legend-item">
                         <div class="color-box pressure2"></div> Sensor 2 (MPa)
                     </span>
+                    <span class="legend-item">
+                        <div class="color-box pressure3"></div> Sensor 3 (MPa)
+                    </span>
+                    <span class="legend-item">
+                        <div class="color-box pressure4"></div> Sensor 4 (MPa)
+                    </span>
                 </div>
             </div>
         </div>
+        
 
-        <!-- Direkte Sensorwertanzeige - Drucksensoren -->
         <div class="sensor-section">
             <h2>Drucksensoren</h2>
             <div id="drucksensoren" class="sensor-grid">
@@ -140,5 +160,14 @@
     </div>
 
     <script src="/script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/3.11.2/modernizr.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.6/jquery.inputmask.min.js"></script>
+<div class="modal" id="calibrationModal">
+    <div class="modal-content">
+      <h3>Kalibrierung</h3>
+      <input type="number" id="calibrationFactor" step="0.001" placeholder="Kalibrierungsfaktor">
+      <button onclick="setCalibration()">Speichern</button>
+    </div>
+  </div>
 </body>
 </html>

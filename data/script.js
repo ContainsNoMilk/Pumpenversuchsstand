@@ -5,7 +5,8 @@
  *********************/
 let recording = false;
 let timeUpdateInterval;
-let sensorChart;
+let pressureChart;
+let flowChart; // Hinzufügen für das Flow-Chart
 const TIME_API_ENDPOINT = '/getTime';
 const TIME_SET_API = '/setTime';
 
@@ -59,7 +60,7 @@ class TimeManager {
     try {
       const datetimeInput = document.getElementById('datetimeInput');
       const localDate = new Date(datetimeInput.value);
-      const utcTimestamp = Math.floor((localDate.getTime() / 1000) - (localDate.getTimezoneOffset() * 60));
+      const utcTimestamp = Math.floor(localDate.getTime() / 1000);
 
       const response = await fetch(`${TIME_SET_API}?timestamp=${utcTimestamp}`);
       if (!response.ok) throw new Error('Zeitsetzung fehlgeschlagen');
@@ -112,49 +113,52 @@ class SensorManager {
     this.updatePressure(data);
     this.updateFlow(data);
     this.updateRecordingStatus(data);
-    this.updateChart(data);
+    this.updateCharts(data);
   }
 
   static updatePressure(data) {
     const container = document.getElementById('drucksensoren');
-    let html = data.druck_error 
-      ? this.createErrorElement(data.druck_error)
-      : Array.from({length: 4}, (_, i) => this.createPressureElement(data[`sensor${i+1}`], i+1)).join('');
-    
-    container.innerHTML = html;
-  }
-
-  static createPressureElement(sensor, id) {
-    if (!sensor) return '';
-    return sensor.angeschlossen
-      ? `<div class="sensor-card">
-           <h3>Sensor ${id}</h3>
-           <p>${sensor.druck_MPa.toFixed(2)} MPa</p>
-           <p>${sensor.druck_bar.toFixed(2)} bar</p>
-         </div>`
-      : this.createErrorElement(`Sensor ${id} nicht verbunden`);
+    let html = '';
+  
+    // Generiere Karten für Sensor 1–4
+    for (let i = 1; i <= 4; i++) {
+      const sensor = data[`sensor${i}`];
+      html += `
+        <div class="sensor-card">
+          <h3>Sensor ${i}</h3>
+          <p>${sensor?.druck_MPa?.toFixed(2) || '–'} MPa</p>
+          <p>${sensor?.druck_bar?.toFixed(2) || '–'} Bar</p>
+          <p class="${sensor?.angeschlossen ? 'connected' : 'disconnected'}">
+            ${sensor?.angeschlossen ? 'Verbunden' : 'Getrennt'}
+          </p>
+        </div>
+      `;
+    }
+  
+    container.innerHTML = html || this.createErrorElement("Keine Daten");
   }
 
   static updateFlow(data) {
     const container = document.getElementById('flowmeter');
     let html = '';
-    
-    if (data.flowMeter1) {
-      html += this.createFlowElement(data.flowMeter1, 1);
+  
+    // Füge beide Durchflusssensoren hinzu
+    if (data.flow1 && data.flow2) {
+      html += this.createFlowElement(data.flow1, 1);
+      html += this.createFlowElement(data.flow2, 2);
     }
-    if (data.flowMeter2) {
-      html += this.createFlowElement(data.flowMeter2, 2);
-    }
-    
-    container.innerHTML = html || this.createErrorElement("Keine Flow-Daten");
+  
+    container.innerHTML = html || this.createErrorElement("Keine Daten");
   }
-
+  
   static createFlowElement(flowData, id) {
-    return `<div class="flow-card">
-              <h3>Flow Meter ${id}</h3>
-              <p>Aktuell: ${flowData.flowRate_L_per_min.toFixed(2)} L/min</p>
-              <p>Gesamt: ${flowData.cumulativeVolume_L.toFixed(1)} L</p>
-            </div>`;
+    return `
+      <div class="flow-card">
+        <h3>Flow Meter ${id}</h3>
+        <p>Aktuell: ${flowData.rate?.toFixed(2) || flowData.flowRate_L_per_min?.toFixed(2) || '–'} L/min</p>
+        <p>Gesamt: ${flowData.total?.toFixed(1) || flowData.cumulativeVolume_L?.toFixed(1) || '–'} L</p>
+      </div>
+    `;
   }
 
   static updateRecordingStatus(data) {
@@ -168,14 +172,39 @@ class SensorManager {
     }
   }
 
-  static updateChart(data) {
-    if (!sensorChart) return;
+  static updateCharts(data) {
+    const currentTime = new Date();
 
-    const time = new Date().toLocaleTimeString();
-    sensorChart.data.labels.push(time);
-    sensorChart.data.datasets[0].data.push(data.sensor1?.druck_MPa || null);
-    sensorChart.data.datasets[1].data.push(data.sensor2?.druck_MPa || null);
-    sensorChart.update();
+    // Druckchart aktualisieren
+    if (pressureChart) {
+      pressureChart.data.labels.push(currentTime);
+      for (let i = 1; i <= 4; i++) {
+        pressureChart.data.datasets[i - 1].data.push(data[`sensor${i}`]?.druck_MPa || null);
+      }
+
+      // Begrenze auf 600 Datenpunkte (10 Minuten bei 1 Sekunde Intervall)
+      if (pressureChart.data.labels.length > 600) {
+        pressureChart.data.labels.shift();
+        pressureChart.data.datasets.forEach(dataset => dataset.data.shift());
+      }
+
+      pressureChart.update();
+    }
+
+    // Durchflusschart aktualisieren
+    if (flowChart) {
+      flowChart.data.labels.push(currentTime);
+      flowChart.data.datasets[0].data.push(data.flow1?.rate || null);
+      flowChart.data.datasets[1].data.push(data.flow2?.rate || null);
+
+      // Begrenze auf 600 Datenpunkte (10 Minuten bei 1 Sekunde Intervall)
+      if (flowChart.data.labels.length > 600) {
+        flowChart.data.labels.shift();
+        flowChart.data.datasets.forEach(dataset => dataset.data.shift());
+      }
+
+      flowChart.update();
+    }
   }
 
   static createErrorElement(message) {
@@ -252,9 +281,9 @@ class SystemManager {
 /*********************
  * DIAGRAMM          *
  *********************/
-function initializeChart() {
-  const ctx = document.getElementById('sensorChart').getContext('2d');
-  sensorChart = new Chart(ctx, {
+function initializePressureChart() {
+  const ctx = document.getElementById('pressureChart').getContext('2d');
+  pressureChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: [], // Zeitstempel
@@ -262,13 +291,25 @@ function initializeChart() {
         {
           label: 'Sensor 1 (MPa)',
           data: [],
-          borderColor: '#4CAF50',
+          borderColor: 'var(--chart-green)', // Grün
           fill: false
         },
         {
           label: 'Sensor 2 (MPa)',
           data: [],
-          borderColor: '#FF5733',
+          borderColor: 'var(--chart-blue)', // Blau
+          fill: false
+        },
+        {
+          label: 'Sensor 3 (MPa)',
+          data: [],
+          borderColor: 'var(--chart-orange)', // Orange
+          fill: false
+        },
+        {
+          label: 'Sensor 4 (MPa)',
+          data: [],
+          borderColor: 'var(--chart-red)', // Rot
           fill: false
         }
       ]
@@ -276,33 +317,61 @@ function initializeChart() {
     options: {
       responsive: true,
       scales: {
-        x: {
-          display: true,
-          title: {
-            display: true,
-            text: 'Zeit'
-          }
+        x: { type: 'time', time: { unit: 'minute' }, title: { display: true, text: 'Zeit' } },
+        y: { title: { display: true, text: 'Druck (MPa)' } }
+      }
+    }
+  });
+}
+
+function initializeFlowChart() {
+  const ctx = document.getElementById('flowChart').getContext('2d');
+  flowChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [], // Zeitstempel
+      datasets: [
+        {
+          label: 'Flow Meter 1 (L/min)',
+          data: [],
+          borderColor: 'var(--chart-green)', // Grün
+          fill: false
         },
-        y: {
-          display: true,
-          title: {
-            display: true,
-            text: 'Druck (MPa)'
-          }
+        {
+          label: 'Flow Meter 2 (L/min)',
+          data: [],
+          borderColor: 'var(--chart-cyan)', // Cyan
+          fill: false
         }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { type: 'time', time: { unit: 'minute' }, title: { display: true, text: 'Zeit' } },
+        y: { title: { display: true, text: 'Durchfluss (L/min)' } }
       }
     }
   });
 }
 
 function resetChart() {
-  if (sensorChart) {
-    sensorChart.data.labels = [];
-    sensorChart.data.datasets.forEach(dataset => {
+  if (pressureChart) {
+    pressureChart.data.labels = [];
+    pressureChart.data.datasets.forEach(dataset => {
       dataset.data = [];
     });
-    sensorChart.update();
-    showToast("Diagramm zurückgesetzt");
+    pressureChart.update();
+    showToast("Druckdiagramm zurückgesetzt");
+  }
+
+  if (flowChart) {
+    flowChart.data.labels = [];
+    flowChart.data.datasets.forEach(dataset => {
+      dataset.data = [];
+    });
+    flowChart.update();
+    showToast("Durchflussdiagramm zurückgesetzt");
   }
 }
 
@@ -334,11 +403,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('toggleRecordingBtn').addEventListener('click', () => SystemManager.toggleRecording());
   
   // Sensor-Updates
-  setInterval(() => SensorManager.update(), 1000);
-  SensorManager.update();
+  setInterval(() => {
+    TimeManager.updateDisplay();
+    SensorManager.update();
+  }, 1000);
 
-  // Diagramm initialisieren
-  initializeChart();
+  // Diagramme initialisieren
+  initializePressureChart();
+  initializeFlowChart();
 });
 
 /*********************
