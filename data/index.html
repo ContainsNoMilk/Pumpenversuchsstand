@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/styles.css">
+    <title>ESP32 Messstation</title>
+    
+    <!-- Chart.js mit Zeitachsen-Support -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+</head>
+
+<body>
+    <!-- Zeit-Anzeige oben rechts -->
+    <div id="timeDisplay" class="time-display"></div>
+
+    <!-- Zeit-Einstellungsmodal -->
+    <div id="timeModal" class="modal">
+        <div class="modal-content">
+            <h3>Zeiteinstellung (Berlin)</h3>
+            <div class="modal-input-group">
+                <input type="datetime-local" id="datetimeInput" 
+                       pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}">
+            </div>
+            <div class="modal-button-group">
+                <button onclick="setCustomTime()" class="primary">
+                    <span class="icon">✓</span> Übernehmen
+                </button>
+                <button onclick="syncDeviceTime()" class="secondary">
+                    <span class="icon">🔄</span> Gerätezeit
+                </button>
+                <button onclick="hideModal()" class="cancel">
+                    <span class="icon">✕</span> Abbrechen
+                </button>
+            </div>
+            <div class="timezone-info">
+                Automatische Umstellung zwischen CET (Winter) und CEST (Sommer)
+            </div>
+        </div>
+    </div>
+
+    <!-- Hauptcontainer -->
+    <div class="container">
+        <h1>Druck- und Durchflussmessung</h1>
+
+        <!-- Echtzeit-Durchflussdiagramm -->
+        <div class="sensor-section">
+            <h2>Echtzeit-Durchfluss (10-Minuten-Fenster)</h2>
+            <div class="chart-container">
+                <canvas id="flowChart"></canvas>
+                <div class="chart-legend">
+                    <span class="legend-item">
+                        <div class="color-box flow1"></div> Sensor 1 (L/min)
+                    </span>
+                    <span class="legend-item">
+                        <div class="color-box flow2"></div> Sensor 2 (L/min)
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Echtzeit-Druckdiagramm -->
+        <div class="sensor-section">
+            <h2>Echtzeit-Druckverlauf (10-Minuten-Fenster)</h2>
+            <div class="chart-container">
+                <canvas id="pressureChart"></canvas>
+                <div class="chart-legend">
+                    <span class="legend-item">
+                        <div class="color-box pressure1"></div> Sensor 1 (MPa)
+                    </span>
+                    <span class="legend-item">
+                        <div class="color-box pressure2"></div> Sensor 2 (MPa)
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Direkte Sensorwertanzeige - Drucksensoren -->
+        <div class="sensor-section">
+            <h2>Drucksensoren</h2>
+            <div id="drucksensoren" class="sensor-grid">
+                <!-- Dynamisch generierte Sensor-Karten -->
+            </div>
+        </div>
+
+        <!-- Direkte Sensorwertanzeige - Durchfluss -->
+        <div class="sensor-section">
+            <h2>Durchflussmessung</h2>
+            <div id="flowmeter" class="sensor-grid">
+                <!-- Dynamisch generierte Flow-Karten -->
+            </div>
+        </div>
+
+        <!-- Steuerungselemente -->
+        <div class="control-panel">
+            <button id="toggleRecordingBtn" onclick="toggleRecording()">
+                <span class="icon">⏺</span> 
+                <span class="text">Aufnahme starten</span>
+            </button>
+            
+            <div class="control-group">
+                <button onclick="deleteLog()" class="warning">
+                    <span class="icon">⚠️</span> Log löschen
+                </button>
+                <button onclick="clearCumulativeFlow()" class="warning">
+                    <span class="icon">⚠️</span> Flow zurücksetzen
+                </button>
+                <button onclick="resetCharts()" class="secondary">
+                    <span class="icon">🔄</span> Diagramme zurücksetzen
+                </button>
+            </div>
+
+            <div class="download-section">
+                <a href="/downloadlog" class="download-link">
+                    <span class="icon">⤓</span> Log herunterladen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Benachrichtigungen -->
+    <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Hilfeseiten-Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <h3>Hilfe</h3>
+            <p>Hier finden Sie Erklärungen zur Funktionalität der Weboberfläche.</p>
+            <ul>
+                <li><strong>Zeitanzeige:</strong> Klicken Sie auf die Uhrzeit, um die Zeit manuell einzustellen</li>
+                <li><strong>Aufnahme:</strong> Starten/Stoppen der Datenaufzeichnung</li>
+                <li><strong>Diagramme:</strong> Zeigen die letzten 10 Minuten in Echtzeit</li>
+                <li><strong>Logdatei:</strong> Enthält alle aufgezeichneten Rohdaten</li>
+            </ul>
+            <button onclick="hideModal()" class="cancel">
+                <span class="icon">✕</span> Schließen
+            </button>
+        </div>
+    </div>
+
+    <script src="/script.js"></script>
+</body>
+</html>
